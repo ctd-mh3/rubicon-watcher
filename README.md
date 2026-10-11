@@ -4,14 +4,14 @@ Get a phone notification when a new event is posted on Team Rubicon's
 [Roll Call](https://rollcall.teamrubiconusa.org/find-events) near you.
 
 Roll Call's own new-event notifications don't always arrive. This tool checks the Find
-Events page every 6 hours as you (using your own login) and sends a push notification
+Events page once a day (adjustable) as you (using your own login) and sends a push notification
 through [ntfy](https://ntfy.sh) for each new event whose max travel distance reaches your
 home. Tapping the notification opens that event's sign-up page.
 
 > **Unofficial.** This is a personal tool by
 > [Crash Test Dummy Limited](https://www.crashtestdummylimited.com) and is not affiliated
 > with or endorsed by Team Rubicon. It only reads what your own logged-in account can
-> already see, about 4 times a day.
+> already see, once a day by default.
 
 Example notification:
 
@@ -118,6 +118,7 @@ Fill in these values, keeping the quotes and commas as they are:
 | `home_lat`, `home_lon` | Your home location in decimal degrees, e.g. `39.8` and `-89.6` (Springfield, IL). In Google Maps, right-click your home (or your town) and click the numbers at the top of the menu to copy them; the first is latitude, the second longitude. Neighborhood-level accuracy is plenty. |
 | `home_zip` | Optional; for your reference only. |
 | `browser_path` | The browser the watcher should use. Chrome: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`. Brave: `"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"`. Edge: `"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"`. Or leave it `null` to use a separate copy of Chromium, after running `.venv/bin/playwright install chromium` once. |
+| `check_interval_hours` | How often to check, in hours. Default `24`. For example `12` or `6` checks more often; please don't go below `1`, to stay polite to Roll Call. After changing it, run `zsh install.sh` again. |
 | `max_miles` | Optional (add it if you want it). Ignore events farther than this, e.g. `500`. Without it, events open to volunteers nationwide are included. |
 
 Save (⌘S) and close TextEdit. To check the file, run
@@ -145,7 +146,7 @@ The first run records the current events and sends a "Rubicon watcher is running
 ```sh
 zsh install.sh
 ```
-This starts the automatic schedule: every 6 hours, and again whenever you log into your Mac.
+This starts the automatic schedule: every 24 hours, and again whenever you log into your Mac.
 You're done. You can close Terminal.
 
 ### Updating to a newer version
@@ -179,11 +180,10 @@ Run these in Terminal from inside the folder (`cd ~/rubicon-watcher` first).
 | `zsh uninstall.sh` | Remove the schedule. Your config and login are kept. |
 | `tail state/watcher.log` | See recent runs, e.g. `7 events, 0 new.` |
 
-**When does it run?** Every 6 hours while you're logged into your Mac, plus once each time
+**When does it run?** Every 24 hours by default (set `check_interval_hours` in `config.json`,
+then re-run `zsh install.sh`) while you're logged into your Mac, plus once each time
 you log in. If the Mac is asleep when a check is due, it runs once on wake. It doesn't run
-while no one is logged in (for example, right after a reboot before you log in). To change
-the interval, edit `StartInterval` (in seconds) in `launchd/*.plist.template` and re-run
-`zsh install.sh`.
+while no one is logged in (for example, right after a reboot before you log in).
 
 **Which events alert?** New events where your distance from the event is within *that
 event's own* maximum travel distance, as set by its organizer (shown on Roll Call as
@@ -201,9 +201,9 @@ The Python code is cross-platform; only the browser path and the scheduler are m
   doubled because it's JSON) or `/usr/bin/google-chrome` (Linux). Or leave it `null` to use
   Playwright's bundled Chromium. More example paths are in `watcher.py`.
 - **Windows scheduling:** create a Task Scheduler task that runs
-  `.venv\Scripts\python.exe watcher.py run` every 6 hours while you're logged on.
+  `.venv\Scripts\python.exe watcher.py run` daily (or as often as you like) while you're logged on.
 - **Linux scheduling:** use cron, e.g.
-  `0 */6 * * * /path/.venv/bin/python /path/watcher.py run >> /path/state/watcher.log 2>&1`,
+  `0 8 * * * /path/.venv/bin/python /path/watcher.py run >> /path/state/watcher.log 2>&1`,
   or a systemd user timer. `login` needs a display; `run` doesn't.
 
 Windows and Linux haven't been tested.

@@ -1,11 +1,11 @@
 # Rubicon Watcher
 
-Checks Team Rubicon's Roll Call "Find Events" page every 6 hours and sends a phone
+Checks Team Rubicon's Roll Call "Find Events" page every 24 hours (configurable) and sends a phone
 push (via ntfy) for each **new** event whose own max distance reaches your home location.
 
 By Crash Test Dummy Limited (www.crashtestdummylimited.com). This is an unofficial
 personal tool, not affiliated with Team Rubicon. It reads only what your own logged-in
-account can see, at a polite rate (4 page loads a day).
+account can see, at a polite rate (one page load a day by default).
 
 ## Files
 
@@ -30,6 +30,8 @@ data (your topic and location), so it's git-ignored; never publish it.
 - `home_zip`: informational only.
 - `home_lat`, `home_lon`: where distances are measured from (decimal degrees; the center of your ZIP is fine).
 - `browser_path` (optional): Chromium-based browser executable; `null`/omitted = Playwright's bundled Chromium.
+- `check_interval_hours` (optional, default 24): hours between scheduled checks. Read by `install.sh`
+  (not `watcher.py`), so re-run `zsh install.sh` after changing it.
 - `max_miles` (optional, not set): an extra distance cap on top of the alert rule, e.g. `500` to drop events with a nationwide (10000 mi) max distance.
 
 ### `state/`
@@ -65,8 +67,8 @@ data (your topic and location), so it's git-ignored; never publish it.
 | Platform | Status | Changes needed |
 |---|---|---|
 | **macOS** | ✅ Built and running here (Apple silicon, python.org Python 3.13, Brave). | None. |
-| **Windows** | Should work; untested. | Set `browser_path` in `config.json` (or leave it `null` for Playwright's Chromium). Use `.venv\Scripts\python.exe`. Schedule with **Task Scheduler** (trigger every 6 h, action `python.exe watcher.py run`, "Run only when user is logged on"). The launchd plist doesn't apply. |
-| **Linux** | Should work; untested. | Set `browser_path` in `config.json` (e.g. `/usr/bin/google-chrome`), or leave it `null`. Schedule with **cron** (`0 */6 * * * /path/.venv/bin/python /path/watcher.py run >> /path/state/watcher.log 2>&1`) or a **systemd user timer**. `login` needs a display (desktop session, `xvfb-run`, or X forwarding); `run` is headless. |
+| **Windows** | Should work; untested. | Set `browser_path` in `config.json` (or leave it `null` for Playwright's Chromium). Use `.venv\Scripts\python.exe`. Schedule with **Task Scheduler** (trigger daily, action `python.exe watcher.py run`, "Run only when user is logged on"). The launchd plist doesn't apply. |
+| **Linux** | Should work; untested. | Set `browser_path` in `config.json` (e.g. `/usr/bin/google-chrome`), or leave it `null`. Schedule with **cron** (`0 8 * * * /path/.venv/bin/python /path/watcher.py run >> /path/state/watcher.log 2>&1`) or a **systemd user timer**. `login` needs a display (desktop session, `xvfb-run`, or X forwarding); `run` is headless. |
 
 What's portable vs. macOS-specific:
 - **Portable:** all of `watcher.py`'s logic (Playwright, `certifi`, `urllib`, `pathlib`), ntfy, and `config.json`/`state/`.
@@ -152,7 +154,9 @@ Uninstall: `zsh uninstall.sh`. It leaves `config.json` and `state/` in place.
   updates never touch them. With git: `git pull`. From a ZIP: copy the new files over the old
   folder (choose Replace). Either way, then run `.venv/bin/pip install -r requirements.txt && zsh install.sh`.
 - **Changing home or radius**: edit `config.json`; no reinstall needed. Each run reads it fresh.
-- **Changing the schedule**: edit `StartInterval` (seconds) in the template, then re-run `zsh install.sh`.
+- **Changing the schedule**: set `check_interval_hours` in `config.json` (default 24; it's git-ignored, so
+  a personal interval survives updates), then re-run `zsh install.sh`. `install.sh` substitutes it
+  into the template's `__INTERVAL_SECONDS__`; don't hard-code a number in the template.
 - Code changes to `watcher.py` take effect on the next run; launchd runs the file directly.
 - **Before publishing**: check that `git status` doesn't show `config.json` or `state/`.
   `state/last_response.json` contains other people's names and emails, and `browser-profile/` holds your login session.

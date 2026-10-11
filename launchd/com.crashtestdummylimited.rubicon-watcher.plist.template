@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  launchd user agent (macOS only) that runs the Rubicon watcher every 6 hours.
+  launchd user agent (macOS only) that runs the Rubicon watcher on a fixed interval
+  (default every 24 hours; set "check_interval_hours" in config.json to change it).
 
   This is a TEMPLATE; don't copy it into LaunchAgents directly. launchd needs absolute
   paths (it doesn't expand ~ or $HOME), so ../install.sh replaces __PROJECT_DIR__ with
-  the project's absolute path, writes the result to
+  the project's absolute path and __INTERVAL_SECONDS__ with the configured interval,
+  writes the result to
   ~/Library/LaunchAgents/com.crashtestdummylimited.rubicon-watcher.plist and (re)loads it.
-  After editing this template, just run ./install.sh again.
+  After editing this template, just run "zsh install.sh" again.
 
-  Uninstall:     ./uninstall.sh
+  Uninstall:     zsh uninstall.sh
   Check status:  launchctl print gui/$(id -u)/com.crashtestdummylimited.rubicon-watcher
   Run now:       launchctl kickstart gui/$(id -u)/com.crashtestdummylimited.rubicon-watcher
 
@@ -31,9 +33,10 @@
     <string>run</string>
   </array>
 
-  <!-- Every 21600 s = 6 hours. If the Mac is asleep when a run is due, launchd runs
-       it once on wake (missed runs are coalesced, not replayed). -->
-  <key>StartInterval</key><integer>21600</integer>
+  <!-- Seconds between runs, filled in by install.sh from config.json
+       "check_interval_hours" (default 24 h = 86400 s). If the Mac is asleep when a run is
+       due, launchd runs it once on wake (missed runs are coalesced, not replayed). -->
+  <key>StartInterval</key><integer>__INTERVAL_SECONDS__</integer>
 
   <!-- Also run once immediately when loaded (at login, or on bootstrap). -->
   <key>RunAtLoad</key><true/>

@@ -23,7 +23,7 @@ Each run then:
 
 Usage:
   watcher.py login   # opens a visible browser window; log into Roll Call once, then close it
-  watcher.py run     # headless check (what launchd runs every 6 hours)
+  watcher.py run     # headless check (what launchd runs; every 24 h by default)
   watcher.py test    # send a test ntfy notification
 
 Exit codes for `run`: 0 = success, 2 = login needed; other failures raise (non-zero).
@@ -35,7 +35,7 @@ code itself is portable: Playwright, certifi and the standard library all run on
 Windows and Linux, and the browser is chosen in config.json (see BROWSER_PATH below).
 The one macOS-specific piece is scheduling: install.sh + launchd/*.plist.template use
 launchd. Use Task Scheduler on Windows, or a cron job / systemd user timer on Linux, to
-run `watcher.py run` every 6 hours.
+run `watcher.py run` every 24 hours (or whatever interval you like).
 `login` opens a visible browser window, so it needs a desktop session; on a headless
 Linux server, run it under xvfb-run or over X forwarding. `run` is headless and needs no
 display. Windows and Linux are expected to work with those changes but are untested.
@@ -63,7 +63,8 @@ LAST_RESPONSE = STATE_DIR / "last_response.json" # raw API payload from the late
 AUTH_ALERT_FILE = STATE_DIR / "auth_alert_sent"  # mtime = when we last sent "login needed"
 
 # config.json keys: ntfy_server, ntfy_topic, home_lat, home_lon, optional max_miles,
-# optional browser_path.
+# optional browser_path, optional check_interval_hours (read by install.sh, not here;
+# default 24).
 # (home_zip is informational only; the code uses the lat/lon.) config.json is personal
 # and git-ignored; config.example.json is the published template to copy from.
 CONFIG_FILE = ROOT / "config.json"
