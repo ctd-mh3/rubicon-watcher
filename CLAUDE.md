@@ -91,9 +91,22 @@ What's portable vs. macOS-specific:
 - **Network access** to pypi.org (install), rollcall.teamrubiconusa.org,
   *.b2clogin.com, *.azurewebsites.net, and ntfy.sh.
 
+The README has the beginner-friendly version of these steps (ZIP download, Terminal basics,
+finding coordinates, TextEdit smart-quote warning). Most people this is shared with have no
+coding or git experience, so keep the README's steps the primary path and in sync with this section.
+
+**Folder location:** use the home folder, e.g. `~/rubicon-watcher`. Never use Desktop,
+Documents, Downloads or iCloud Drive: macOS privacy protection (TCC) blocks launchd jobs
+from reading them, so scheduled runs fail silently. `install.sh` refuses those locations.
+The path must also avoid `& # \ < > "`, which `install.sh` also checks.
+
+**Getting the code:** either GitHub's **Code → Download ZIP** (the folder unzips as
+`rubicon-watcher-main`; rename it to `rubicon-watcher`), or
+`git clone https://github.com/ctd-mh3/rubicon-watcher.git ~/rubicon-watcher`.
+
 ### 2. Install
 ```sh
-cd /path/to/rubicon-watcher
+cd ~/rubicon-watcher
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
@@ -108,16 +121,17 @@ cp config.example.json config.json  # then edit: your own ntfy_topic, home_lat/h
 
 ### 4. Schedule (launchd)
 ```sh
-./install.sh        # renders the template, installs to ~/Library/LaunchAgents, loads it (runs once now)
+zsh install.sh      # renders the template, installs to ~/Library/LaunchAgents, loads it (runs once now)
 launchctl print gui/$(id -u)/com.crashtestdummylimited.rubicon-watcher | grep -E "state|last exit|run interval"
 tail state/watcher.log
 ```
-`install.sh` checks that `.venv` and `config.json` exist first. Re-run it after editing the
+Docs use `zsh install.sh` rather than `./install.sh` so it works even if a ZIP download
+lost the executable bit. `install.sh` checks that `.venv` and `config.json` exist first. Re-run it after editing the
 template or moving the project folder (the paths are baked in at install time, because
 launchd doesn't expand `~`).
 
 Run a check now: `launchctl kickstart gui/$(id -u)/com.crashtestdummylimited.rubicon-watcher`.
-Uninstall: `./uninstall.sh`. It leaves `config.json` and `state/` in place.
+Uninstall: `zsh uninstall.sh`. It leaves `config.json` and `state/` in place.
 
 ### 5. Expected macOS prompts
 - **"App Background Activity – Software from 'Python Software Foundation' can run in the
@@ -134,8 +148,11 @@ Uninstall: `./uninstall.sh`. It leaves `config.json` and `state/` in place.
 - **ERROR lines in `watcher.log`**: likely Roll Call changed the page or API. Check
   `state/last_response.json` and the field notes in `watcher.py` (`event_list` fails loudly
   on shape changes).
+- **Updating to a new version**: `config.json`, `state/` and `.venv/` aren't in the repo, so
+  updates never touch them. With git: `git pull`. From a ZIP: copy the new files over the old
+  folder (choose Replace). Either way, then run `.venv/bin/pip install -r requirements.txt && zsh install.sh`.
 - **Changing home or radius**: edit `config.json`; no reinstall needed. Each run reads it fresh.
-- **Changing the schedule**: edit `StartInterval` (seconds) in the template, then re-run `./install.sh`.
+- **Changing the schedule**: edit `StartInterval` (seconds) in the template, then re-run `zsh install.sh`.
 - Code changes to `watcher.py` take effect on the next run; launchd runs the file directly.
 - **Before publishing**: check that `git status` doesn't show `config.json` or `state/`.
   `state/last_response.json` contains other people's names and emails, and `browser-profile/` holds your login session.
