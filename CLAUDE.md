@@ -3,6 +3,12 @@
 Checks Team Rubicon's Roll Call "Find Events" page every 24 hours (configurable) and sends a phone
 push (via ntfy) for each **new** event whose own max distance reaches your home location.
 
+Why it exists: Roll Call's own notifications appear to work for **operations** when the
+Greyshirt (Team Rubicon member) is within the travel distance; operations with flight waves
+use a 10000 mi max distance, so they reach everyone. They're unreliable for other event types
+(e.g. Training, Project, Engagement). The watcher doesn't filter by `serviceType`, so
+operations alert too, which may duplicate Roll Call's own notification.
+
 By Crash Test Dummy Limited (www.crashtestdummylimited.com). This is an unofficial
 personal tool, not affiliated with Team Rubicon. It reads only what your own logged-in
 account can see, at a polite rate (one page load a day by default).
@@ -53,7 +59,7 @@ data (your topic and location), so it's git-ignored; never publish it.
   response bodies. That's why the code intercepts the request instead of using `expect_response`.
 - **Alert rule** (a deliberate choice): distance from home ≤ the event's
   `registrationRadiusOptionSet`. The site's own list is *not* filtered this way; it shows
-  everything sorted by distance. Events with a 10000 mi max always qualify.
+  everything sorted by distance. Events with a 10000 mi max (e.g. operations with flight waves) always qualify.
 - Event coordinates are in `customFields.vms_latitude/vms_longitude` (the top-level
   `latitude/longitude` are null). `customFields.vms_state` is `{"Id", "Name"}`.
 - Event page link: `https://rollcall.teamrubiconusa.org/event/sessions?id=<readableEventId>`.

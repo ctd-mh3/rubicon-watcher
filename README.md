@@ -3,10 +3,17 @@
 Get a phone notification when a new event is posted on Team Rubicon's
 [Roll Call](https://rollcall.teamrubiconusa.org/find-events) near you.
 
-Roll Call's own new-event notifications don't always arrive. This tool checks the Find
-Events page once a day (adjustable) as you (using your own login) and sends a push notification
-through [ntfy](https://ntfy.sh) for each new event whose max travel distance reaches your
-home. Tapping the notification opens that event's sign-up page.
+Roll Call's own notifications seem to work for **operations** (disaster responses) when
+you, the Greyshirt, are within the travel distance. Operations that fly in volunteers in
+waves use a 10000 mile max distance, so they reach everyone. The problem is other event
+types, such as **Training**, **Project** and **Engagement** events: Roll Call often doesn't
+send a notification for those even when you're in range.
+
+This tool checks the Find Events page once a day (adjustable) as you (using your own login)
+and sends a push notification through [ntfy](https://ntfy.sh) for each new event whose max
+travel distance reaches your home. It doesn't filter by event type, so you may also get an
+alert for an operation that Roll Call already told you about. Tapping the notification opens
+that event's sign-up page.
 
 > **Unofficial.** This is a personal tool by
 > [Crash Test Dummy Limited](https://www.crashtestdummylimited.com) and is not affiliated
@@ -187,8 +194,8 @@ while no one is logged in (for example, right after a reboot before you log in).
 
 **Which events alert?** New events where your distance from the event is within *that
 event's own* maximum travel distance, as set by its organizer (shown on Roll Call as
-"N miles away vs a M mile max distance"). Events open to everyone always qualify unless
-you set `max_miles`. Events already in range on the first run don't alert. An event that's
+"N miles away vs a M mile max distance"). Events open to everyone (a 10000 mile max,
+used for example by operations that fly volunteers in) always qualify unless you set `max_miles`. Events already in range on the first run don't alert. An event that's
 out of range is re-checked every run, so if its organizer later raises its max distance to
 reach you, you're notified once at that point.
 
