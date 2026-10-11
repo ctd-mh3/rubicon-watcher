@@ -1,0 +1,8 @@
+{
+  "ntfy_server": "https://ntfy.sh",
+  "ntfy_topic": "rubicon-CHANGE-ME-to-a-random-string",
+  "home_zip": "00000",
+  "home_lat": 0.0,
+  "home_lon": 0.0,
+  "browser_path": null
+}

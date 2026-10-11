@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd user agent (macOS only) that runs the Rubicon watcher every 6 hours.
+
+  This is a TEMPLATE; don't copy it into LaunchAgents directly. launchd needs absolute
+  paths (it doesn't expand ~ or $HOME), so ../install.sh replaces __PROJECT_DIR__ with
+  the project's absolute path, writes the result to
+  ~/Library/LaunchAgents/com.crashtestdummylimited.rubicon-watcher.plist and (re)loads it.
+  After editing this template, just run ./install.sh again.
+
+  Uninstall:     ./uninstall.sh
+  Check status:  launchctl print gui/$(id -u)/com.crashtestdummylimited.rubicon-watcher
+  Run now:       launchctl kickstart gui/$(id -u)/com.crashtestdummylimited.rubicon-watcher
+
+  It's a user agent (not a system daemon), so it only runs while you are logged in.
+  macOS lists it under System Settings > General > Login Items & Extensions as
+  "Python Software Foundation"; turning that switch off stops the watcher.
+-->
+<plist version="1.0">
+<dict>
+  <!-- Unique job name; must match the file name and the launchctl commands above. -->
+  <key>Label</key><string>com.crashtestdummylimited.rubicon-watcher</string>
+
+  <!-- Use the project's venv Python directly so playwright/certifi are importable
+       without activating anything. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PROJECT_DIR__/.venv/bin/python</string>
+    <string>__PROJECT_DIR__/watcher.py</string>
+    <string>run</string>
+  </array>
+
+  <!-- Every 21600 s = 6 hours. If the Mac is asleep when a run is due, launchd runs
+       it once on wake (missed runs are coalesced, not replayed). -->
+  <key>StartInterval</key><integer>21600</integer>
+
+  <!-- Also run once immediately when loaded (at login, or on bootstrap). -->
+  <key>RunAtLoad</key><true/>
+
+  <!-- stdout and stderr (incl. tracebacks) are appended here. The file isn't
+       rotated, but each run writes about one line. -->
+  <key>StandardOutPath</key><string>__PROJECT_DIR__/state/watcher.log</string>
+  <key>StandardErrorPath</key><string>__PROJECT_DIR__/state/watcher.log</string>
+</dict>
+</plist>

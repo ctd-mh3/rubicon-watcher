@@ -1,0 +1,6 @@
+.venv/
+state/
+__pycache__/
+.DS_Store
+# Personal settings (ntfy topic, home location); publish config.example.json instead.
+config.json
