@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Watch Team Rubicon Roll Call "Find Events" for new events and push them via ntfy.
+"""Watch Team Rubicon Roll Call "Find Events" for new events and notify you about them
+(phone push via ntfy and/or a desktop notification on macOS or Windows).
 
 How it works
 ------------
@@ -18,13 +19,13 @@ renews tokens on each headless run for as long as the B2C session lasts.
 Each run then:
   1. keeps only events within reach of your home (see in_radius),
   2. compares their IDs against state/seen.json,
-  3. sends one ntfy push per never-seen event, and
+  3. sends one notification per never-seen event (see notify), and
   4. records them as seen.
 
 Usage:
   watcher.py login   # opens a visible browser window; log into Roll Call once, then close it
   watcher.py run     # headless check (what launchd runs; every 24 h by default)
-  watcher.py test    # send a test ntfy notification
+  watcher.py test    # send a test notification (phone and/or desktop)
 
 Exit codes for `run`: 0 = success, 2 = login needed; other failures raise (non-zero).
 
@@ -39,16 +40,21 @@ run `watcher.py run` every 24 hours (or whatever interval you like).
 `login` opens a visible browser window, so it needs a desktop session; on a headless
 Linux server, run it under xvfb-run or over X forwarding. `run` is headless and needs no
 display. Windows and Linux are expected to work with those changes but are untested.
+Desktop notifications (see desktop_notify) support macOS and Windows; on Linux they are
+skipped, so use ntfy there.
 """
 import json
 import math
+import os
 import ssl
+import subprocess
 import sys
 import time
 import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 import certifi
 from playwright.sync_api import sync_playwright
@@ -62,15 +68,20 @@ SEEN_FILE = STATE_DIR / "seen.json"              # sorted list of eventIds alrea
 LAST_RESPONSE = STATE_DIR / "last_response.json" # raw API payload from the latest run (debugging)
 AUTH_ALERT_FILE = STATE_DIR / "auth_alert_sent"  # mtime = when we last sent "login needed"
 
-# config.json keys: ntfy_server, ntfy_topic, home_lat, home_lon, optional max_miles,
-# optional browser_path, optional check_interval_hours (read by install.sh, not here;
-# default 24).
+# config.json keys: ntfy_server, ntfy_topic (null = no phone pushes), home_lat, home_lon,
+# optional max_miles, optional browser_path, optional desktop_notifications (default
+# true), optional check_interval_hours (read by install.sh, not here; default 24).
 # (home_zip is informational only; the code uses the lat/lon.) config.json is personal
 # and git-ignored; config.example.json is the published template to copy from.
 CONFIG_FILE = ROOT / "config.json"
 if not CONFIG_FILE.exists():
     sys.exit(f"Missing {CONFIG_FILE}: copy config.example.json to config.json and fill it in.")
 CONFIG = json.loads(CONFIG_FILE.read_text())
+# Both channels are optional, but at least one must be on or alerts would go nowhere.
+USE_NTFY = bool(CONFIG.get("ntfy_topic"))
+USE_DESKTOP = CONFIG.get("desktop_notifications", True)
+if not (USE_NTFY or USE_DESKTOP):
+    sys.exit("config.json: set ntfy_topic and/or desktop_notifications, or you'll never be notified.")
 
 # python.org builds of Python on macOS don't use the system keychain for TLS roots, so
 # HTTPS fails with CERTIFICATE_VERIFY_FAILED. Use certifi's CA bundle explicitly.
@@ -128,7 +139,11 @@ def ntfy(title, message, click=None, priority="high", tags="rotating_light"):
       priority - min/low/default/high/urgent; "high" makes the phone buzz/sound
       tags     - comma-separated; names matching emoji shortcodes render as emoji
       click    - URL opened when the notification is tapped (always built by us,
-                 never taken from the API, so the payload can't redirect you elsewhere)
+                 never taken from the API, so the payload can't redirect you elsewhere).
+                 Also sent as an "Open Event" view-action button: the iOS app only
+                 follows the tap-URL from the system banner, while tapping the message
+                 inside the app copies its text. The button works in both places
+                 (long-press the banner to see it).
     Anyone who knows the topic name can read or post to it, so it's a random string.
     """
     payload = {
@@ -137,7 +152,9 @@ def ntfy(title, message, click=None, priority="high", tags="rotating_light"):
         "message": message,
         "priority": NTFY_PRIORITY[priority],
         "tags": tags.split(","),
-        **({"click": click} if click else {}),
+        **({"click": click,
+            "actions": [{"action": "view", "label": "Open Event", "url": click}]}
+           if click else {}),
     }
     req = urllib.request.Request(
         CONFIG["ntfy_server"].rstrip("/") + "/",
@@ -145,6 +162,94 @@ def ntfy(title, message, click=None, priority="high", tags="rotating_light"):
         headers={"Content-Type": "application/json"},
     )
     urllib.request.urlopen(req, timeout=20, context=SSL_CTX).read()
+
+
+# macOS dialog for alerts that have a link (macOS notifications can't open a URL when
+# clicked; they open Script Editor). A dialog stays on screen until you click a button,
+# so it also can't be missed the way a banner can. argv: window title, text, URL.
+MAC_DIALOG_SCRIPT = """on run argv
+activate
+if (item 4 of argv) is "1" then beep
+set r to display dialog (item 2 of argv) with title (item 1 of argv) ¬
+    buttons {"Dismiss", "Open Event"} default button "Open Event" with icon note
+if button returned of r is "Open Event" then open location (item 3 of argv)
+end run"""
+
+# Windows toast: Windows PowerShell 5.1 (powershell.exe, built into Windows 10/11; not
+# PowerShell 7's pwsh) can call the WinRT toast API directly, so nothing extra is needed.
+# The toast XML is built and escaped in Python and passed in an environment variable, so
+# event text never becomes part of the PowerShell script. Toasts must belong to a
+# registered app ID; PowerShell's own is borrowed, so they appear as "Windows PowerShell".
+WINDOWS_TOAST_PS = r"""
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] > $null
+$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$xml.LoadXml($env:RUBICON_TOAST_XML)
+$app = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($app).Show(
+    [Windows.UI.Notifications.ToastNotification]::new($xml))
+"""
+
+
+def desktop_notify(title, message, click=None, sound=True):
+    """Show a notification on this computer's desktop (macOS or Windows).
+
+    The watcher only runs while you're logged in, so a desktop notification reaches you
+    whenever a check happens at your computer. Both methods use tools built into the OS
+    and pass event text as data (argv / an environment variable), never spliced into a
+    script, because event names come from Roll Call organizers.
+
+      macOS:   with a link (new events, test): a dialog with "Open Event" / "Dismiss"
+               buttons (MAC_DIALOG_SCRIPT) that stays until you answer it. osascript is
+               started detached in its own session, so the run doesn't wait for you and
+               launchd doesn't kill it when the run ends; several new events give
+               several dialogs. Without a link ("running", "login needed"): a regular
+               notification ("display notification"), which macOS attributes to
+               "Script Editor" in System Settings > Notifications.
+      Windows: a toast via PowerShell (see WINDOWS_TOAST_PS). Clicking it opens the
+               event page; missed toasts wait in Notification Center.
+      Other:   not supported; does nothing.
+    """
+    if sys.platform == "darwin" and click:
+        subprocess.Popen(["osascript", "-e", MAC_DIALOG_SCRIPT, "Rubicon Watcher",
+                          f"{title}\n\n{message}", click, "1" if sound else "0"],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+    elif sys.platform == "darwin":
+        script = ("on run argv\n"
+                  "display notification (item 2 of argv) with title (item 1 of argv)"
+                  + (' sound name "Glass"' if sound else "") + "\n"
+                  "end run")
+        subprocess.run(["osascript", "-e", script, title, message],
+                       check=True, capture_output=True, timeout=30)
+    elif sys.platform == "win32":
+        # click is always our own event_url, but escape it anyway since it's an attribute.
+        launch = (f' activationType="protocol" launch="{xml_escape(click, {chr(34): "&quot;"})}"'
+                  if click else "")
+        audio = "" if sound else '<audio silent="true"/>'
+        toast = (f'<toast{launch}><visual><binding template="ToastGeneric">'
+                 f"<text>{xml_escape(title)}</text><text>{xml_escape(message)}</text>"
+                 f"</binding></visual>{audio}</toast>")
+        subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_TOAST_PS],
+                       env={**os.environ, "RUBICON_TOAST_XML": toast},
+                       check=True, capture_output=True, timeout=60,
+                       creationflags=subprocess.CREATE_NO_WINDOW)  # no console window flash
+
+
+def notify(title, message, click=None, priority="high", tags="rotating_light"):
+    """Send one alert through every enabled channel: ntfy (phone) and the desktop.
+
+    An ntfy failure raises, so cmd_run stops before updating seen.json and retries next
+    run. A desktop failure is only logged: the computer may have notifications turned
+    off, and that shouldn't block the phone push or cause repeats.
+    """
+    if USE_NTFY:
+        ntfy(title, message, click=click, priority=priority, tags=tags)
+    if USE_DESKTOP:
+        try:
+            desktop_notify(title, message, click=click, sound=priority in ("high", "urgent"))
+        except Exception as e:
+            log(f"Desktop notification failed: {e!r}")
 
 
 # --- Browser / data capture ---------------------------------------------------------------
@@ -318,8 +423,8 @@ def cmd_run():
         log("Not logged in.")
         # Alert at most once a day so an expired session doesn't spam you every run.
         if not AUTH_ALERT_FILE.exists() or time.time() - AUTH_ALERT_FILE.stat().st_mtime > 86400:
-            ntfy("Rubicon watcher: login needed",
-                 "Roll Call session expired. Run: watcher.py login", tags="warning")
+            notify("Rubicon watcher: login needed",
+                   "Roll Call session expired. Run: watcher.py login", tags="warning")
             AUTH_ALERT_FILE.touch()
         return 2
 
@@ -335,14 +440,14 @@ def cmd_run():
     new_ids = [i for i in current if i not in seen]
 
     if first_run:
-        ntfy("Rubicon watcher is running",
-             f"Tracking {len(current)} current events. You'll be notified about new ones.",
-             priority="default", tags="white_check_mark")
+        notify("Rubicon watcher is running",
+               f"Tracking {len(current)} current events. You'll be notified about new ones.",
+               priority="default", tags="white_check_mark")
         log(f"First run: seeded {len(current)} events.")
     else:
         for i in new_ids:
             name, detail = describe(current[i])
-            ntfy(f"New Rubicon event: {name}", detail or name, click=event_url(current[i]))
+            notify(f"New Rubicon event: {name}", detail or name, click=event_url(current[i]))
         log(f"{len(current)} events, {len(new_ids)} new.")
 
     # seen.json only grows (union), so an event that disappears and reappears won't
@@ -367,7 +472,9 @@ def main():
             log(f"ERROR: {e!r}")
             raise
     elif cmd == "test":
-        ntfy("Rubicon watcher test", "If you see this, ntfy is set up.", tags="tada")
+        # With a link, so the test also shows the macOS dialog (opens Find Events).
+        notify("Rubicon watcher test", "If you see this, notifications are set up.",
+               click=FIND_EVENTS_URL, tags="tada")
         print("Sent.")
     else:
         sys.exit(__doc__)

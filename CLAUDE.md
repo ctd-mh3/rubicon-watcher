@@ -1,7 +1,8 @@
 # Rubicon Watcher
 
 Checks Team Rubicon's Roll Call "Find Events" page every 24 hours (configurable) and sends a phone
-push (via ntfy) for each **new** event whose own max distance reaches your home location.
+push (via ntfy) plus a desktop notification (macOS/Windows) for each **new** event whose own max
+distance reaches your home location.
 
 Why it exists: Roll Call's own notifications appear to work for **operations** when the
 Greyshirt (Team Rubicon member) is within the travel distance; operations with flight waves
@@ -31,11 +32,13 @@ JSON can't hold comments, so the keys are documented here. `config.json` holds p
 data (your topic and location), so it's git-ignored; never publish it.
 
 - `ntfy_server`: `https://ntfy.sh` (public server; on iOS, instant delivery only works with it).
-- `ntfy_topic`: random topic name. Anyone who knows it can read or post to it, so generate your own, e.g.
+- `ntfy_topic`: random topic name (`null` = no phone pushes, desktop only). Anyone who knows it can read or post to it, so generate your own, e.g.
   `python3 -c "import secrets; print('rubicon-' + secrets.token_hex(8))"`.
 - `home_zip`: informational only.
 - `home_lat`, `home_lon`: where distances are measured from (decimal degrees; the center of your ZIP is fine).
 - `browser_path` (optional): Chromium-based browser executable; `null`/omitted = Playwright's bundled Chromium.
+- `desktop_notifications` (optional, default `true`): also show each alert on this computer's desktop.
+  At least one of `ntfy_topic` / `desktop_notifications` must be on, or the watcher exits.
 - `check_interval_hours` (optional, default 24): hours between scheduled checks. Read by `install.sh`
   (not `watcher.py`), so re-run `zsh install.sh` after changing it.
 - `max_miles` (optional, not set): an extra distance cap on top of the alert rule, e.g. `500` to drop events with a nationwide (10000 mi) max distance.
@@ -64,6 +67,17 @@ data (your topic and location), so it's git-ignored; never publish it.
   `latitude/longitude` are null). `customFields.vms_state` is `{"Id", "Name"}`.
 - Event page link: `https://rollcall.teamrubiconusa.org/event/sessions?id=<readableEventId>`.
 - Haversine distances match the site's "N miles away" to within about 1 mile.
+- **Notifications** all go through `notify()`: ntfy first (a failure raises, so seen.json isn't
+  updated and the run retries), then `desktop_notify()` (a failure is only logged). Desktop
+  notifications pass event text as data, never inside a script, since organizers write it:
+  macOS shows alerts that have a link (new events, `test`) as an `osascript` `display dialog` with
+  Open Event / Dismiss buttons (macOS notifications can't open a URL; clicking one opens Script
+  Editor). It's started detached (`start_new_session`) so the run doesn't wait, and the plist sets
+  `AbandonProcessGroup` so launchd doesn't kill open dialogs when the run exits. Alerts without a
+  link use `display notification` (shown as "Script Editor"). Windows builds escaped toast XML in Python, passes it in the
+  `RUBICON_TOAST_XML` environment variable to built-in Windows PowerShell 5.1, borrowing
+  PowerShell's app ID (click opens the event). Linux: skipped. Because the watcher runs only
+  while you're logged in, desktop notifications always have a logged-in session to show in.
 - Running scripts inside the live Roll Call tab through the Claude in Chrome extension
   tended to hang the renderer (heavy Bing map). Analyze `state/last_response.json`
   offline instead.
@@ -78,6 +92,7 @@ data (your topic and location), so it's git-ignored; never publish it.
 
 What's portable vs. macOS-specific:
 - **Portable:** all of `watcher.py`'s logic (Playwright, `certifi`, `urllib`, `pathlib`), ntfy, and `config.json`/`state/`.
+- **Per-OS:** desktop notifications (`desktop_notify`): macOS and Windows built-ins; none on Linux (untested on Windows).
 - **macOS-only:** `install.sh`/`uninstall.sh` and the launchd template, and the macOS prompts described below.
 - **Browser choice:** `browser_path` in `config.json` accepts any Chromium-based browser executable (Brave, Chrome, Edge, Chromium; example paths are in `watcher.py`). Leave it `null` to use Playwright's bundled Chromium, after running `.venv/bin/playwright install chromium` once. Firefox and Safari aren't supported (the code uses Chromium-only Playwright APIs).
 - **Moving to another machine:** run `login` again there rather than copying `state/browser-profile`. Browser profiles may not carry over cleanly between machines or operating systems.
@@ -122,7 +137,7 @@ python3 -m venv .venv
 ### 3. Configure and verify
 ```sh
 cp config.example.json config.json  # then edit: your own ntfy_topic, home_lat/home_lon
-.venv/bin/python watcher.py test    # phone should get "Rubicon watcher test"
+.venv/bin/python watcher.py test    # phone and desktop should get "Rubicon watcher test"
 .venv/bin/python watcher.py login   # browser window opens: log in, wait for events, close window
 .venv/bin/python watcher.py run     # headless; first run seeds seen.json and sends "running" push
 ```
@@ -149,6 +164,9 @@ Uninstall: `zsh uninstall.sh`. It leaves `config.json` and `state/` in place.
   the browser (launched by Python) peeking at other apps' data at startup. The watcher doesn't need
   this access and runs fine with it blocked, so leave it blocked. If it repeats every run,
   consider adding browser launch flags (e.g. `--no-first-run`) in `launch()`.
+- **Notifications from "Script Editor"**: status notifications ("running", "login needed").
+  macOS attributes `osascript` notifications to Script Editor. Allow them. New events use a
+  dialog window instead, which needs no permission.
 
 ## Maintenance
 

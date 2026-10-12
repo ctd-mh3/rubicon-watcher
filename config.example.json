@@ -5,5 +5,6 @@
   "home_lat": 0.0,
   "home_lon": 0.0,
   "browser_path": null,
+  "desktop_notifications": true,
   "check_interval_hours": 24
 }

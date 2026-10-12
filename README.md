@@ -1,7 +1,7 @@
 # Rubicon Watcher
 
-Get a phone notification when a new event is posted on Team Rubicon's
-[Roll Call](https://rollcall.teamrubiconusa.org/find-events) near you.
+Get a phone notification (and a desktop notification on your Mac or PC) when a new event
+is posted on Team Rubicon's [Roll Call](https://rollcall.teamrubiconusa.org/find-events) near you.
 
 Roll Call's own notifications seem to work for **operations** (disaster responses) when
 you, the Greyshirt, are within the travel distance. Operations that fly in volunteers in
@@ -10,10 +10,11 @@ types, such as **Training**, **Project** and **Engagement** events: Roll Call of
 send a notification for those even when you're in range.
 
 This tool checks the Find Events page once a day (adjustable) as you (using your own login)
-and sends a push notification through [ntfy](https://ntfy.sh) for each new event whose max
+and sends a push notification through [ntfy](https://ntfy.sh), plus a desktop notification,
+for each new event whose max
 travel distance reaches your home. It doesn't filter by event type, so you may also get an
-alert for an operation that Roll Call already told you about. Tapping the notification opens
-that event's sign-up page.
+alert for an operation that Roll Call already told you about. Tapping the phone notification,
+or its **Open Event** button, opens that event's sign-up page.
 
 > **Unofficial.** This is a personal tool by
 > [Crash Test Dummy Limited](https://www.crashtestdummylimited.com) and is not affiliated
@@ -38,7 +39,7 @@ downloads. Then it:
 1. measures the distance from your home to each event,
 2. keeps the events whose own max distance reaches you,
 3. compares them against the events it has already seen, and
-4. sends one ntfy push per new event.
+4. sends one ntfy push and one desktop notification per new event.
 
 If Roll Call ever logs it out, you get a "login needed" push (at most once a day).
 
@@ -49,7 +50,8 @@ If Roll Call ever logs it out, you get a "login needed" push (at most once a day
 - A Chromium-based browser: Brave, Chrome, Edge or Chromium, or Playwright's bundled
   Chromium if you'd rather not use an installed browser (see `browser_path` below)
 - The official **ntfy** app on your phone (by Philipp Heckel; iOS and Android, see
-  [ntfy's phone setup](https://docs.ntfy.sh/subscribe/phone/))
+  [ntfy's phone setup](https://docs.ntfy.sh/subscribe/phone/)). Optional if desktop
+  notifications are enough for you.
 - A Team Rubicon Roll Call account
 
 ## Setup (macOS)
@@ -125,6 +127,7 @@ Fill in these values, keeping the quotes and commas as they are:
 | `home_lat`, `home_lon` | Your home location in decimal degrees, e.g. `39.8` and `-89.6` (Springfield, IL). In Google Maps, right-click your home (or your town) and click the numbers at the top of the menu to copy them; the first is latitude, the second longitude. Neighborhood-level accuracy is plenty. |
 | `home_zip` | Optional; for your reference only. |
 | `browser_path` | The browser the watcher should use. Chrome: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`. Brave: `"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"`. Edge: `"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"`. Or leave it `null` to use a separate copy of Chromium, after running `.venv/bin/playwright install chromium` once. |
+| `desktop_notifications` | `true` (default) also shows each alert as a notification on this computer. `false` turns that off. To use desktop notifications only, with no phone, set `ntfy_topic` to `null` instead of a topic name. |
 | `check_interval_hours` | How often to check, in hours. Default `24`. For example `12` or `6` checks more often; please don't go below `1`, to stay polite to Roll Call. After changing it, run `zsh install.sh` again. |
 | `max_miles` | Optional (add it if you want it). Ignore events farther than this, e.g. `500`. Without it, events open to volunteers nationwide are included. |
 
@@ -139,7 +142,14 @@ In the ntfy app, tap **+** and subscribe to your topic on the default `ntfy.sh` 
 ```sh
 .venv/bin/python watcher.py test
 ```
-Your phone should get a test notification.
+Your phone should get a test notification, and your Mac should show a "Rubicon Watcher"
+window with **Open Event** and **Dismiss** buttons. On the Mac, each new event appears as
+one of these windows. It stays until you click a button, and **Open Event** opens that
+event's page. (Status messages like "login needed" appear as regular Mac notifications
+instead. If macOS asks whether to allow notifications from **Script Editor**, click
+**Allow**: that's how macOS labels them.) On the phone, tap the notification banner to open
+the event. Inside the ntfy app, use the **Open Event** button under the message instead:
+tapping the message itself only copies its text.
 ```sh
 .venv/bin/python watcher.py login
 ```
@@ -209,6 +219,8 @@ The Python code is cross-platform; only the browser path and the scheduler are m
   Playwright's bundled Chromium. More example paths are in `watcher.py`.
 - **Windows scheduling:** create a Task Scheduler task that runs
   `.venv\Scripts\python.exe watcher.py run` daily (or as often as you like) while you're logged on.
+- **Desktop notifications** work on Windows 10/11 too, as regular notifications from
+  "Windows PowerShell"; clicking one opens the event. Linux has none, so use ntfy there.
 - **Linux scheduling:** use cron, e.g.
   `0 8 * * * /path/.venv/bin/python /path/watcher.py run >> /path/state/watcher.log 2>&1`,
   or a systemd user timer. `login` needs a display; `run` doesn't.
@@ -221,8 +233,8 @@ Windows and Linux haven't been tested.
   sees or stores your password.
 - `config.json` (your topic and location) and `state/` are git-ignored. Don't share them.
   `state/last_response.json` contains event organizers' contact details.
-- Notifications go through the public ntfy.sh server and contain only event names, dates,
-  places and distances.
+- Phone notifications go through the public ntfy.sh server and contain only event names,
+  dates, places and distances. Desktop notifications stay on your computer.
 
 ## If something breaks
 

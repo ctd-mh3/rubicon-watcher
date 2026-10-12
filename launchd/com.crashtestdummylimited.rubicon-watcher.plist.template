@@ -41,6 +41,10 @@
   <!-- Also run once immediately when loaded (at login, or on bootstrap). -->
   <key>RunAtLoad</key><true/>
 
+  <!-- Don't kill leftover child processes when a run ends: a "new event" dialog
+       (osascript) stays open until you answer it. -->
+  <key>AbandonProcessGroup</key><true/>
+
   <!-- stdout and stderr (incl. tracebacks) are appended here. The file isn't
        rotated, but each run writes about one line. -->
   <key>StandardOutPath</key><string>__PROJECT_DIR__/state/watcher.log</string>
